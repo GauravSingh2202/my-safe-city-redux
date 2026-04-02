@@ -20,8 +20,8 @@ export default function LoginPage() {
       await login(email, password);
       toast.success('Welcome back!');
       navigate('/');
-    } catch {
-      toast.error('Invalid email or password');
+    } catch (err: any) {
+      toast.error(err.message || 'Invalid email or password');
     } finally {
       setLoading(false);
     }
@@ -44,7 +44,7 @@ export default function LoginPage() {
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-input bg-background text-sm focus:ring-2 focus:ring-primary/30 outline-none"
-                  placeholder="john@example.com" required />
+                  placeholder="your@email.com" required />
               </div>
             </div>
 
@@ -59,13 +59,6 @@ export default function LoginPage() {
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-            </div>
-
-            <div className="text-xs text-muted-foreground bg-accent/50 rounded-lg p-3">
-              <p className="font-semibold mb-1">Demo accounts:</p>
-              <p>Citizen: john@example.com</p>
-              <p>Admin: admin@mysafecity.com</p>
-              <p>Any password works</p>
             </div>
 
             <button type="submit" disabled={loading}

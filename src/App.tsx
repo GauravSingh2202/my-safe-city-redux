@@ -3,7 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import Navbar from "@/components/Navbar";
@@ -21,6 +21,37 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+function AppContent() {
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <Navbar />
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/report" element={<ReportCrimePage />} />
+        <Route path="/my-reports" element={<MyReportsPage />} />
+        <Route path="/heatmap" element={<HeatmapPage />} />
+        <Route path="/emergency-services" element={<EmergencyServicesPage />} />
+        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+      <SOSButton />
+    </>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -30,20 +61,7 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
-              <Navbar />
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/register" element={<RegisterPage />} />
-                <Route path="/report" element={<ReportCrimePage />} />
-                <Route path="/my-reports" element={<MyReportsPage />} />
-                <Route path="/heatmap" element={<HeatmapPage />} />
-                <Route path="/emergency-services" element={<EmergencyServicesPage />} />
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/notifications" element={<NotificationsPage />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-              <SOSButton />
+              <AppContent />
             </BrowserRouter>
           </NotificationProvider>
         </AuthProvider>

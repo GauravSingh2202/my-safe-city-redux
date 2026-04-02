@@ -10,8 +10,8 @@ export interface User {
 
 export interface AuthState {
   user: User | null;
-  token: string | null;
   isAuthenticated: boolean;
+  loading: boolean;
 }
 
 export interface SOSAlert {
@@ -70,6 +70,7 @@ export interface EmergencyService {
 
 export interface Notification {
   _id: string;
+  userId?: string;
   type: 'sos' | 'crime' | 'system' | 'alert';
   title: string;
   message: string;
