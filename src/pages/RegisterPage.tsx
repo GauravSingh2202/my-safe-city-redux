@@ -20,10 +20,14 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register(form);
-      toast.success('Account created!');
+      toast.success('Account created! Check your email to verify.');
       navigate('/');
-    } catch {
-      toast.error('Registration failed');
+    } catch (err: any) {
+      if (err.message?.includes('already registered')) {
+        toast.error('This email is already registered. Please sign in.');
+      } else {
+        toast.error(err.message || 'Registration failed');
+      }
     } finally {
       setLoading(false);
     }
