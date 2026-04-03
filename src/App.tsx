@@ -46,6 +46,7 @@ function AppContent() {
         <Route path="/emergency-services" element={<EmergencyServicesPage />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       <SOSButton />
