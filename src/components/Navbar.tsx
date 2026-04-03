@@ -125,9 +125,14 @@ export default function Navbar() {
                 </Link>
               ))}
               {isAuthenticated ? (
-                <button onClick={() => { handleLogout(); setMobileOpen(false); }} className="px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent text-left flex items-center gap-2">
-                  <LogOut className="w-4 h-4" /> Logout
-                </button>
+                <>
+                  <Link to="/profile" onClick={() => setMobileOpen(false)} className="px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent text-left flex items-center gap-2">
+                    <User className="w-4 h-4" /> My Profile
+                  </Link>
+                  <button onClick={() => { handleLogout(); setMobileOpen(false); }} className="px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent text-left flex items-center gap-2">
+                    <LogOut className="w-4 h-4" /> Logout
+                  </button>
+                </>
               ) : (
                 <Link to="/login" onClick={() => setMobileOpen(false)} className="px-4 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium text-center">
                   Sign In
