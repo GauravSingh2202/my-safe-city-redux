@@ -17,6 +17,7 @@ import HeatmapPage from "@/pages/HeatmapPage";
 import EmergencyServicesPage from "@/pages/EmergencyServicesPage";
 import AdminDashboard from "@/pages/AdminDashboard";
 import NotificationsPage from "@/pages/NotificationsPage";
+import ProfilePage from "@/pages/ProfilePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
