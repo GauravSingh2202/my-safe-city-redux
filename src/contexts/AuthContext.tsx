@@ -107,8 +107,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.signOut();
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      const user = await fetchUserProfile(session);
+      setState({ user, isAuthenticated: true, loading: false });
+    }
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout }}>
+    <AuthContext.Provider value={{ ...state, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
