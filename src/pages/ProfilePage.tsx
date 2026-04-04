@@ -2,10 +2,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { User, Mail, Phone, Shield, Calendar, FileText, AlertTriangle, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { User, Mail, Phone, Shield, Calendar, FileText, AlertTriangle, CheckCircle, Clock, XCircle, Pencil } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
+import { supabase } from '@/integrations/supabase/client';
 import type { CrimeReport, SOSAlert } from '@/types';
+import ProfileEditDialog from '@/components/ProfileEditDialog';
+import { Button } from '@/components/ui/button';
 
 export default function ProfilePage() {
   const { user, isAuthenticated } = useAuth();
