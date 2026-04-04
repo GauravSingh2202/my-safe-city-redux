@@ -44,7 +44,7 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      const res = await supabase.functions.invoke('send-otp', {
+      const res = await supabase.functions.invoke('send-otp?action=send', {
         body: { phone },
         headers: { 'Content-Type': 'application/json' },
       });
