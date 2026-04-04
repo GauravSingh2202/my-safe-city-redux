@@ -10,11 +10,12 @@ import ProfileEditDialog from '@/components/ProfileEditDialog';
 import { Button } from '@/components/ui/button';
 
 export default function ProfilePage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, refreshUser } = useAuth();
   const navigate = useNavigate();
   const [reports, setReports] = useState<CrimeReport[]>([]);
   const [sosAlerts, setSOSAlerts] = useState<SOSAlert[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
