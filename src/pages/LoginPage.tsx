@@ -44,8 +44,12 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({ phone });
-      if (error) throw new Error(error.message);
+      const res = await supabase.functions.invoke('send-otp?action=send', {
+        body: { phone },
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.error) throw new Error(res.error.message);
+      if (res.data?.error) throw new Error(res.data.error);
       setOtpSent(true);
       toast.success('OTP sent to your phone!');
     } catch (err: any) {
@@ -59,8 +63,21 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const { error } = await supabase.auth.verifyOtp({ phone, token: otp, type: 'sms' });
-      if (error) throw new Error(error.message);
+      const res = await supabase.functions.invoke('send-otp?action=verify', {
+        body: { phone, code: otp },
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.error) throw new Error(res.error.message);
+      if (res.data?.error) throw new Error(res.data.error);
+
+      if (res.data?.session?.token_hash) {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: res.data.session.token_hash,
+          type: 'magiclink',
+        });
+        if (error) throw new Error(error.message);
+      }
+
       toast.success('Welcome!');
       navigate('/');
     } catch (err: any) {
