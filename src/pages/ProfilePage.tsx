@@ -2,17 +2,20 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { User, Mail, Phone, Shield, Calendar, FileText, AlertTriangle, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { User, Mail, Phone, Shield, Calendar, FileText, AlertTriangle, CheckCircle, Clock, XCircle, Pencil } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
 import type { CrimeReport, SOSAlert } from '@/types';
+import ProfileEditDialog from '@/components/ProfileEditDialog';
+import { Button } from '@/components/ui/button';
 
 export default function ProfilePage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, refreshUser } = useAuth();
   const navigate = useNavigate();
   const [reports, setReports] = useState<CrimeReport[]>([]);
   const [sosAlerts, setSOSAlerts] = useState<SOSAlert[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -87,7 +90,12 @@ export default function ProfilePage() {
               )}
             </div>
             <div className="text-center sm:text-left flex-1">
-              <h1 className="text-2xl font-bold">{user.name || 'User'}</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold">{user.name || 'User'}</h1>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditOpen(true)}>
+                  <Pencil className="w-4 h-4" />
+                </Button>
+              </div>
               <div className="flex flex-wrap items-center gap-3 mt-2 justify-center sm:justify-start">
                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${isAdmin ? 'bg-primary/10 text-primary' : 'bg-accent text-accent-foreground'}`}>
                   <Shield className="w-3 h-3 inline mr-1" />
@@ -198,6 +206,13 @@ export default function ProfilePage() {
           )}
         </motion.div>
       </div>
+
+      <ProfileEditDialog
+        user={user}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onSaved={() => refreshUser()}
+      />
     </div>
   );
 }

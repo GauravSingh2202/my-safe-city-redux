@@ -7,6 +7,7 @@ interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (data: { name: string; email: string; password: string; phone?: string }) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -106,8 +107,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.signOut();
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      const user = await fetchUserProfile(session);
+      setState({ user, isAuthenticated: true, loading: false });
+    }
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout }}>
+    <AuthContext.Provider value={{ ...state, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
