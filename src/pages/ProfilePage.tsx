@@ -206,6 +206,13 @@ export default function ProfilePage() {
           )}
         </motion.div>
       </div>
+
+      <ProfileEditDialog
+        user={user}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onSaved={() => refreshUser()}
+      />
     </div>
   );
 }
