@@ -46,9 +46,8 @@ serve(async (req) => {
   const TWILIO_PHONE = Deno.env.get("TWILIO_PHONE_NUMBER");
 
   try {
-    const url = new URL(req.url);
-    const action = url.searchParams.get("action");
     const body = await req.json();
+    const action = body.action || new URL(req.url).searchParams.get("action");
 
     if (action === "send") {
       const parsed = SendOtpSchema.safeParse(body);
