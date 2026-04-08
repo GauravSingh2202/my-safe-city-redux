@@ -1,10 +1,16 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, BarChart3, AlertTriangle, TrendingUp } from 'lucide-react';
-import { api } from '@/services/api';
+import { supabase } from '@/integrations/supabase/client';
 import type { HeatmapPoint, CrimeReport } from '@/types';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const riskColors = {
   low: { fill: '#22c55e', stroke: '#16a34a', bg: 'bg-success/10', text: 'text-success' },
@@ -22,24 +28,93 @@ function getColor(intensity: number) {
   return riskColors[getRisk(intensity)];
 }
 
+function mapRowToHeatmapPoint(r: any): HeatmapPoint {
+  return {
+    lat: r.crime_location_lat || r.location_lat,
+    lng: r.crime_location_lng || r.location_lng,
+    intensity: r.severity === 'high' ? 0.9 : r.severity === 'medium' ? 0.6 : 0.3,
+    type: r.type,
+    areaName: r.crime_location_address || r.location_address || 'Unknown',
+    incidentCount: 1,
+  };
+}
+
+function mapRowToReport(r: any): CrimeReport {
+  return {
+    _id: r.id,
+    userId: r.user_id,
+    userName: '',
+    type: r.type,
+    title: r.title,
+    description: r.description,
+    location: { lat: r.location_lat, lng: r.location_lng, address: r.location_address || undefined },
+    crimeLocation: r.crime_location_lat != null ? { lat: r.crime_location_lat, lng: r.crime_location_lng, address: r.crime_location_address || undefined } : undefined,
+    status: r.status,
+    severity: r.severity,
+    createdAt: r.created_at,
+    statusUpdates: r.status_updates || [],
+  };
+}
+
+function getDateThreshold(period: string): string | null {
+  if (period === 'all') return null;
+  const now = new Date();
+  const days = period === '7d' ? 7 : 30;
+  now.setDate(now.getDate() - days);
+  return now.toISOString();
+}
+
 export default function HeatmapPage() {
   const [points, setPoints] = useState<HeatmapPoint[]>([]);
   const [reports, setReports] = useState<CrimeReport[]>([]);
   const [filter, setFilter] = useState('all');
+  const [timePeriod, setTimePeriod] = useState('all');
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
 
-  useEffect(() => {
-    const fetchData = () => {
-      api.getHeatmapData().then(setPoints);
-      api.getCrimeReports().then(setReports);
-    };
-    fetchData();
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
-  }, []);
+  const fetchData = useCallback(async () => {
+    const threshold = getDateThreshold(timePeriod);
+    let query = supabase
+      .from('crime_reports')
+      .select('id, user_id, type, title, description, severity, status, location_lat, location_lng, location_address, crime_location_lat, crime_location_lng, crime_location_address, created_at, status_updates');
 
+    if (threshold) {
+      query = query.gte('created_at', threshold);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) return;
+
+    setPoints((data || []).map(mapRowToHeatmapPoint));
+    setReports((data || []).map(mapRowToReport));
+  }, [timePeriod]);
+
+  // Initial fetch + refetch on time period change
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Realtime subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel('heatmap-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'crime_reports' },
+        () => {
+          // Refetch all data on any change to stay consistent with time filter
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchData]);
+
+  // Map init
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
     const map = L.map(mapContainerRef.current).setView([30.3165, 78.0322], 13);
@@ -55,6 +130,11 @@ export default function HeatmapPage() {
     if (filter === 'all') return points;
     return points.filter(p => p.type === filter);
   }, [points, filter]);
+
+  const filteredReports = useMemo(() => {
+    if (filter === 'all') return reports;
+    return reports.filter(r => r.type === filter);
+  }, [reports, filter]);
 
   const areaStats = useMemo(() => {
     const map = new Map<string, { incidents: number; highestRisk: string; types: Set<string> }>();
@@ -74,6 +154,7 @@ export default function HeatmapPage() {
       .sort((a, b) => b.incidents - a.incidents);
   }, [filteredPoints]);
 
+  // Update map markers
   useEffect(() => {
     if (!layerGroupRef.current) return;
     layerGroupRef.current.clearLayers();
@@ -105,16 +186,17 @@ export default function HeatmapPage() {
         .addTo(layerGroupRef.current!);
     });
 
-    reports.forEach(r => {
+    filteredReports.forEach(r => {
+      const loc = r.crimeLocation || r.location;
       const tooltipContent = `
         <div style="padding:6px;min-width:150px">
           <div style="font-weight:700;margin-bottom:4px">${r.title}</div>
           <div style="font-size:12px;color:#888">${r.type} · ${r.severity} severity</div>
-          <div style="font-size:12px;color:#888">${r.location.address || ''}</div>
+          <div style="font-size:12px;color:#888">${loc.address || ''}</div>
         </div>
       `;
 
-      L.circleMarker([r.location.lat, r.location.lng], {
+      L.circleMarker([loc.lat, loc.lng], {
         radius: 6,
         fillColor: r.severity === 'high' ? '#ef4444' : r.severity === 'medium' ? '#f59e0b' : '#22c55e',
         color: '#fff',
@@ -124,7 +206,7 @@ export default function HeatmapPage() {
         .bindTooltip(tooltipContent, { permanent: false, direction: 'top', className: 'heatmap-tooltip', offset: [0, -8] })
         .addTo(layerGroupRef.current!);
     });
-  }, [filteredPoints, reports]);
+  }, [filteredPoints, filteredReports]);
 
   const types = ['all', 'theft', 'assault', 'vandalism', 'robbery', 'fraud', 'harassment'];
   const totalIncidents = areaStats.reduce((sum, a) => sum + a.incidents, 0);
@@ -134,7 +216,7 @@ export default function HeatmapPage() {
     <div className="min-h-screen py-8">
       <div className="container mx-auto px-4">
         <h1 className="text-3xl font-bold mb-2">Crime Heatmap</h1>
-        <p className="text-muted-foreground mb-6">Visualize crime hotspots across Dehradun</p>
+        <p className="text-muted-foreground mb-6">Visualize crime hotspots across Dehradun · Updates in real-time</p>
 
         {/* Summary Cards */}
         <div className="grid grid-cols-3 gap-4 mb-6">
@@ -152,16 +234,31 @@ export default function HeatmapPage() {
           </div>
         </div>
 
-        {/* Filter */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          {types.map(t => (
-            <button key={t} onClick={() => setFilter(t)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${
-                filter === t ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-accent'
-              }`}>
-              {t}
-            </button>
-          ))}
+        {/* Filters Row */}
+        <div className="flex flex-wrap items-center gap-4 mb-4">
+          {/* Crime type filter */}
+          <div className="flex flex-wrap gap-2">
+            {types.map(t => (
+              <button key={t} onClick={() => setFilter(t)}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${
+                  filter === t ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-accent'
+                }`}>
+                {t}
+              </button>
+            ))}
+          </div>
+
+          {/* Time period filter */}
+          <Select value={timePeriod} onValueChange={setTimePeriod}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Time period" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7d">Last 7 Days</SelectItem>
+              <SelectItem value="30d">Last 30 Days</SelectItem>
+              <SelectItem value="all">All Time</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Legend */}
@@ -176,6 +273,13 @@ export default function HeatmapPage() {
               {l.label}
             </div>
           ))}
+          <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
+            </span>
+            Live
+          </div>
         </div>
 
         {/* Map */}
