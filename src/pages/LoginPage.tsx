@@ -63,8 +63,8 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await supabase.functions.invoke('send-otp?action=verify', {
-        body: { phone, code: otp },
+      const res = await supabase.functions.invoke('send-otp', {
+        body: { phone, code: otp, action: 'verify' },
         headers: { 'Content-Type': 'application/json' },
       });
       if (res.error) throw new Error(res.error.message);
