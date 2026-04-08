@@ -14,10 +14,6 @@ export default function SOSButton() {
   if (!isAuthenticated || user?.role === 'admin') return null;
 
   const handleSOS = async () => {
-    if (!isAuthenticated) {
-      navigate('/login');
-      return;
-    }
     setState('locating');
     try {
       const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
