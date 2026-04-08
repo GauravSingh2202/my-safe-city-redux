@@ -10,8 +10,8 @@ export default function SOSButton() {
   const navigate = useNavigate();
   const [state, setState] = useState<'idle' | 'locating' | 'sending' | 'sent'>('idle');
 
-  // Hide SOS for admin users
-  if (user?.role === 'admin') return null;
+  // Hide SOS for non-authenticated users and admin users
+  if (!isAuthenticated || user?.role === 'admin') return null;
 
   const handleSOS = async () => {
     if (!isAuthenticated) {
