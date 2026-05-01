@@ -8,6 +8,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import Navbar from "@/components/Navbar";
 import SOSButton from "@/components/SOSButton";
+import AIChatbot from "@/components/AIChatbot";
 import HomePage from "@/pages/HomePage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
@@ -50,6 +51,7 @@ function AppContent() {
         <Route path="*" element={<NotFound />} />
       </Routes>
       <SOSButton />
+      <AIChatbot />
     </>
   );
 }

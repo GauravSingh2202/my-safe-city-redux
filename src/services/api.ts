@@ -34,6 +34,11 @@ function mapReport(r: any): CrimeReport {
     mediaNames: r.media_names || undefined,
     createdAt: r.created_at,
     statusUpdates: r.status_updates || [],
+    resolvedAt: r.resolved_at || undefined,
+    crimeTime: r.crime_time || undefined,
+    assignedStation: r.assigned_station || undefined,
+    estimatedResolutionTime: r.estimated_resolution_time || undefined,
+    adminAction: r.admin_action && Object.keys(r.admin_action).length ? r.admin_action : undefined,
   };
 }
 
@@ -166,6 +171,7 @@ export const api = {
       severity: reportData.severity || 'medium',
       media_names: reportData.mediaNames || null,
       status_updates: statusUpdates,
+      crime_time: reportData.crimeTime || new Date().toISOString(),
     }).select('*, profiles(name)').single();
 
     if (error) throw new Error(error.message);
@@ -190,6 +196,22 @@ export const api = {
     const { data, error } = await supabase
       .from('crime_reports')
       .update({ status, status_updates: updates })
+      .eq('id', id)
+      .select('*, profiles(name)')
+      .single();
+    if (error) throw new Error(error.message);
+    return mapReport(data);
+  },
+
+  updateReportAdmin: async (id: string, fields: { assignedStation?: string; estimatedResolutionTime?: string; adminAction?: any; }): Promise<CrimeReport> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const payload: any = {};
+    if (fields.assignedStation !== undefined) payload.assigned_station = fields.assignedStation;
+    if (fields.estimatedResolutionTime !== undefined) payload.estimated_resolution_time = fields.estimatedResolutionTime;
+    if (fields.adminAction !== undefined) payload.admin_action = { ...fields.adminAction, updatedAt: new Date().toISOString(), updatedBy: session?.user.id };
+    const { data, error } = await supabase
+      .from('crime_reports')
+      .update(payload)
       .eq('id', id)
       .select('*, profiles(name)')
       .single();

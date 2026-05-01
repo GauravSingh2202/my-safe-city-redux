@@ -48,6 +48,7 @@ export default function AdminDashboard() {
   const [selectedAlert, setSelectedAlert] = useState<SOSAlert | null>(null);
 
   const [newService, setNewService] = useState({ name: '', type: 'police' as EmergencyService['type'], address: '', phone: '', lat: '', lng: '' });
+  const [adminEdit, setAdminEdit] = useState({ assignedStation: '', estimatedResolutionTime: '', action: '', note: '' });
 
   const fetchData = () => {
     api.getDashboardStats().then(setStats);
@@ -63,6 +64,34 @@ export default function AdminDashboard() {
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, [isAuthenticated, user, navigate]);
+
+  // Sync admin edit form when selected report changes
+  useEffect(() => {
+    if (selectedReport) {
+      setAdminEdit({
+        assignedStation: selectedReport.assignedStation || '',
+        estimatedResolutionTime: selectedReport.estimatedResolutionTime || '',
+        action: selectedReport.adminAction?.action || '',
+        note: selectedReport.adminAction?.note || '',
+      });
+    }
+  }, [selectedReport]);
+
+  const saveAdminAction = async () => {
+    if (!selectedReport) return;
+    try {
+      const updated = await api.updateReportAdmin(selectedReport._id, {
+        assignedStation: adminEdit.assignedStation || undefined,
+        estimatedResolutionTime: adminEdit.estimatedResolutionTime || undefined,
+        adminAction: { action: adminEdit.action, note: adminEdit.note },
+      });
+      toast.success('Admin action saved');
+      setSelectedReport(updated);
+      fetchData();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save');
+    }
+  };
 
   const handleReportAction = (id: string, action: CrimeReport['status'], note?: string) => {
     api.updateReportStatus(id, action, note || `Report ${action} by admin`).then(() => { fetchData(); toast.success(`Report ${action}`); });
@@ -398,6 +427,44 @@ export default function AdminDashboard() {
                             className="flex-1 py-2.5 rounded-xl bg-emergency text-emergency-foreground font-semibold text-sm hover:opacity-90 transition-all active:scale-95">Reject</button>
                         </div>
                       )}
+                      {/* Admin transparency editor */}
+                      <div className="mt-4 pt-4 border-t border-border space-y-3">
+                        <div className="text-xs font-semibold text-muted-foreground">ADMIN ACTION & TRANSPARENCY</div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Assigned Station</label>
+                            <input value={adminEdit.assignedStation} onChange={e => setAdminEdit(p => ({ ...p, assignedStation: e.target.value }))}
+                              placeholder="e.g. Dehradun Central PS"
+                              className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                          </div>
+                          <div>
+                            <label className="text-xs text-muted-foreground mb-1 block">Estimated Resolution</label>
+                            <input value={adminEdit.estimatedResolutionTime} onChange={e => setAdminEdit(p => ({ ...p, estimatedResolutionTime: e.target.value }))}
+                              placeholder="e.g. 3 days"
+                              className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground mb-1 block">Action Taken</label>
+                          <input value={adminEdit.action} onChange={e => setAdminEdit(p => ({ ...p, action: e.target.value }))}
+                            placeholder="e.g. FIR registered, patrol dispatched"
+                            className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground mb-1 block">Internal Note</label>
+                          <textarea value={adminEdit.note} onChange={e => setAdminEdit(p => ({ ...p, note: e.target.value }))}
+                            rows={2}
+                            className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none" />
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={saveAdminAction}
+                            className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-all active:scale-95">Save Admin Action</button>
+                          {selectedReport.status !== 'resolved' && (
+                            <button onClick={() => { handleReportAction(selectedReport._id, 'resolved', 'Case resolved by admin'); setSelectedReport(null); }}
+                              className="flex-1 py-2 rounded-lg bg-success text-success-foreground font-semibold text-sm hover:opacity-90 transition-all active:scale-95">Mark Resolved</button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}

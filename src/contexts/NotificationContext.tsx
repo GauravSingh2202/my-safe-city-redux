@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Notification } from '@/types';
 import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -23,8 +24,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
     const load = () => api.getNotifications().then(setNotifications).catch(() => {});
     load();
-    const interval = setInterval(load, 10000);
-    return () => clearInterval(interval);
+    // Realtime: refresh on any notification change
+    const channel = supabase
+      .channel('notifications-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [isAuthenticated]);
 
   const unreadCount = notifications.filter(n => !n.read).length;

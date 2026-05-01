@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { CrimeReport } from '@/types';
+import MapPicker from '@/components/MapPicker';
 
 const crimeTypes: { value: CrimeReport['type']; label: string }[] = [
   { value: 'theft', label: 'Theft' },
@@ -29,9 +30,7 @@ export default function ReportCrimePage() {
   const [form, setForm] = useState({ title: '', description: '', type: 'theft' as CrimeReport['type'], severity: 'medium' as CrimeReport['severity'] });
   const [location, setLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
   const [crimeLocation, setCrimeLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
-  const [crimeLocationInput, setCrimeLocationInput] = useState({ lat: '', lng: '' });
   const [locating, setLocating] = useState(false);
-  const [resolvingCrimeLoc, setResolvingCrimeLoc] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
@@ -61,25 +60,15 @@ export default function ReportCrimePage() {
     }
   };
 
-  const resolveCrimeLocation = async () => {
-    const lat = parseFloat(crimeLocationInput.lat);
-    const lng = parseFloat(crimeLocationInput.lng);
-    if (isNaN(lat) || isNaN(lng)) {
-      toast.error('Enter valid latitude and longitude');
-      return;
-    }
-    setResolvingCrimeLoc(true);
-    const address = await reverseGeocode(lat, lng);
-    setCrimeLocation({ lat, lng, address });
-    setResolvingCrimeLoc(false);
-    toast.success('Crime location resolved');
+  const handlePinChange = async (loc: { lat: number; lng: number }) => {
+    setCrimeLocation({ ...loc, address: 'Resolving…' });
+    const address = await reverseGeocode(loc.lat, loc.lng);
+    setCrimeLocation({ ...loc, address });
   };
 
   const useSameAsMyLocation = () => {
     if (location) {
-      setCrimeLocation({ ...location });
-      setCrimeLocationInput({ lat: String(location.lat), lng: String(location.lng) });
-      toast.success('Using your current location as crime location');
+      handlePinChange({ lat: location.lat, lng: location.lng });
     }
   };
 
@@ -116,7 +105,7 @@ export default function ReportCrimePage() {
             <button onClick={() => navigate('/my-reports')} className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90">
               View My Reports
             </button>
-            <button onClick={() => { setSubmitted(false); setForm({ title: '', description: '', type: 'theft', severity: 'medium' }); setLocation(null); setCrimeLocation(null); setCrimeLocationInput({ lat: '', lng: '' }); setFiles([]); }}
+            <button onClick={() => { setSubmitted(false); setForm({ title: '', description: '', type: 'theft', severity: 'medium' }); setLocation(null); setCrimeLocation(null); setFiles([]); }}
               className="px-6 py-2.5 border border-border rounded-lg font-medium hover:bg-accent">
               Submit Another
             </button>
@@ -195,26 +184,27 @@ export default function ReportCrimePage() {
 
             {/* Crime Location */}
             <div className="glass-card rounded-xl p-5">
-              <label className="text-sm font-semibold mb-3 block">Crime Location (optional)</label>
-              {location && (
-                <button type="button" onClick={useSameAsMyLocation} className="text-xs text-primary mb-3 hover:underline">
-                  Use same as my location
-                </button>
-              )}
-              <div className="flex gap-2 mb-2">
-                <input value={crimeLocationInput.lat} onChange={e => setCrimeLocationInput(p => ({ ...p, lat: e.target.value }))}
-                  className="flex-1 px-3 py-2 rounded-lg border border-input bg-background text-sm" placeholder="Latitude" />
-                <input value={crimeLocationInput.lng} onChange={e => setCrimeLocationInput(p => ({ ...p, lng: e.target.value }))}
-                  className="flex-1 px-3 py-2 rounded-lg border border-input bg-background text-sm" placeholder="Longitude" />
-                <button type="button" onClick={resolveCrimeLocation} disabled={resolvingCrimeLoc}
-                  className="px-3 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium">
-                  {resolvingCrimeLoc ? 'Resolving...' : 'Resolve'}
-                </button>
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-sm font-semibold">Pin Crime Location on Map</label>
+                {location && (
+                  <button type="button" onClick={useSameAsMyLocation} className="text-xs text-primary hover:underline">
+                    Use my location
+                  </button>
+                )}
               </div>
+              <p className="text-xs text-muted-foreground mb-3">Click or drag the pin to set the exact location.</p>
+              <MapPicker
+                value={crimeLocation}
+                initialCenter={location || undefined}
+                onChange={handlePinChange}
+              />
               {crimeLocation && (
-                <div className="flex items-center gap-2 text-sm text-success">
-                  <MapPin className="w-4 h-4" />
-                  <span>{crimeLocation.address}</span>
+                <div className="flex items-start gap-2 text-sm text-success mt-3">
+                  <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
+                  <div>
+                    <div>{crimeLocation.address}</div>
+                    <div className="text-xs text-muted-foreground">Lat: {crimeLocation.lat.toFixed(5)}, Lng: {crimeLocation.lng.toFixed(5)}</div>
+                  </div>
                 </div>
               )}
             </div>

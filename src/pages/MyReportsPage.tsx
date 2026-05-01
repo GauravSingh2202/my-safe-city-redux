@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { FileText, MapPin, Clock, CheckCircle, XCircle, Search, Image, ArrowRight } from 'lucide-react';
+import { FileText, MapPin, Clock, CheckCircle, XCircle, Search, Image, ArrowRight, Building2, Timer, Shield } from 'lucide-react';
 import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -10,9 +10,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 const statusConfig: Record<string, { color: string; icon: any }> = {
   pending: { color: 'bg-warning/10 text-warning border-warning/20', icon: Clock },
   approved: { color: 'bg-success/10 text-success border-success/20', icon: CheckCircle },
+  resolved: { color: 'bg-success/10 text-success border-success/20', icon: CheckCircle },
   rejected: { color: 'bg-destructive/10 text-destructive border-destructive/20', icon: XCircle },
   investigating: { color: 'bg-primary/10 text-primary border-primary/20', icon: Search },
 };
+
+function formatDuration(ms: number) {
+  const hours = Math.floor(ms / 3600000);
+  if (hours < 1) return '<1 hour';
+  if (hours < 48) return `${hours} hours`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
 
 export default function MyReportsPage() {
   const { user, isAuthenticated } = useAuth();
@@ -96,6 +105,43 @@ export default function MyReportsPage() {
                     <div><span className="text-muted-foreground">Current Status</span><p className="font-medium capitalize">{selected.status}</p></div>
                     <div><span className="text-muted-foreground">Submitted</span><p className="font-medium">{new Date(selected.createdAt).toLocaleString()}</p></div>
                   </div>
+                  {/* Resolution timing */}
+                  <div className="rounded-lg border border-border p-3 bg-secondary/30">
+                    {selected.status === 'resolved' && selected.resolvedAt ? (
+                      <div className="flex items-center gap-2 text-success">
+                        <Timer className="w-4 h-4" />
+                        <span className="font-medium">Resolved in {formatDuration(new Date(selected.resolvedAt).getTime() - new Date(selected.createdAt).getTime())}</span>
+                      </div>
+                    ) : selected.status === 'investigating' ? (
+                      <div className="flex items-center gap-2 text-primary">
+                        <Search className="w-4 h-4" />
+                        <span className="font-medium">Under Investigation</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Clock className="w-4 h-4" />
+                        <span className="font-medium capitalize">Status: {selected.status}</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Admin transparency */}
+                  {(selected.assignedStation || selected.estimatedResolutionTime || selected.adminAction?.action) && (
+                    <div className="rounded-lg border border-border p-3 space-y-2">
+                      <div className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" /> ADMIN ACTION</div>
+                      {selected.assignedStation && (
+                        <div className="flex items-center gap-2 text-sm"><Building2 className="w-4 h-4 text-muted-foreground" /> {selected.assignedStation}</div>
+                      )}
+                      {selected.estimatedResolutionTime && (
+                        <div className="flex items-center gap-2 text-sm"><Timer className="w-4 h-4 text-muted-foreground" /> Estimated: {selected.estimatedResolutionTime}</div>
+                      )}
+                      {selected.adminAction?.action && (
+                        <div className="text-sm"><span className="text-muted-foreground">Action taken: </span>{selected.adminAction.action}</div>
+                      )}
+                      {selected.adminAction?.note && (
+                        <div className="text-xs text-muted-foreground italic">{selected.adminAction.note}</div>
+                      )}
+                    </div>
+                  )}
                   <div>
                     <span className="text-muted-foreground">Submitted From</span>
                     <p className="font-medium">{selected.location.address || 'Unknown'}</p>
