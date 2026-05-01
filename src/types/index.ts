@@ -49,10 +49,15 @@ export interface CrimeReport {
   };
   media?: string[];
   mediaNames?: string[];
-  status: 'pending' | 'approved' | 'rejected' | 'investigating';
+  status: 'pending' | 'approved' | 'rejected' | 'investigating' | 'resolved';
   severity: 'low' | 'medium' | 'high';
   createdAt: string;
   statusUpdates?: { status: string; timestamp: string; note?: string }[];
+  resolvedAt?: string;
+  crimeTime?: string;
+  assignedStation?: string;
+  estimatedResolutionTime?: string;
+  adminAction?: { action?: string; note?: string; updatedAt?: string; updatedBy?: string };
 }
 
 export interface EmergencyService {
