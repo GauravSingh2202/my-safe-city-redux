@@ -61,10 +61,6 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') { navigate('/login'); return; }
     fetchData();
-    // Realtime subscriptions instead of polling
-    const channels = [
-      (window as any).supabase?.channel?.('admin-reports') ?? null,
-    ].filter(Boolean);
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, [isAuthenticated, user, navigate]);
