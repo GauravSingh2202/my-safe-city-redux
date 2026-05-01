@@ -105,7 +105,7 @@ export default function ReportCrimePage() {
             <button onClick={() => navigate('/my-reports')} className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90">
               View My Reports
             </button>
-            <button onClick={() => { setSubmitted(false); setForm({ title: '', description: '', type: 'theft', severity: 'medium' }); setLocation(null); setCrimeLocation(null); setCrimeLocationInput({ lat: '', lng: '' }); setFiles([]); }}
+            <button onClick={() => { setSubmitted(false); setForm({ title: '', description: '', type: 'theft', severity: 'medium' }); setLocation(null); setCrimeLocation(null); setFiles([]); }}
               className="px-6 py-2.5 border border-border rounded-lg font-medium hover:bg-accent">
               Submit Another
             </button>
