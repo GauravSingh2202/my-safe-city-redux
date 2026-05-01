@@ -53,6 +53,11 @@ function mapRowToReport(r: any): CrimeReport {
     severity: r.severity,
     createdAt: r.created_at,
     statusUpdates: r.status_updates || [],
+    resolvedAt: r.resolved_at || undefined,
+    crimeTime: r.crime_time || undefined,
+    assignedStation: r.assigned_station || undefined,
+    estimatedResolutionTime: r.estimated_resolution_time || undefined,
+    adminAction: r.admin_action && Object.keys(r.admin_action).length ? r.admin_action : undefined,
   };
 }
 
@@ -62,6 +67,21 @@ function getDateThreshold(period: string): string | null {
   const days = period === '7d' ? 7 : 30;
   now.setDate(now.getDate() - days);
   return now.toISOString();
+}
+
+function formatDuration(ms: number) {
+  const hours = Math.floor(ms / 3600000);
+  if (hours < 1) return '<1h';
+  if (hours < 48) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
+function timeBucket(d: Date) {
+  const h = d.getHours();
+  if (h >= 6 && h < 12) return 'morning';
+  if (h >= 12 && h < 18) return 'afternoon';
+  return 'night';
 }
 
 export default function HeatmapPage() {
@@ -77,7 +97,7 @@ export default function HeatmapPage() {
     const threshold = getDateThreshold(timePeriod);
     let query = supabase
       .from('crime_reports')
-      .select('id, user_id, type, title, description, severity, status, location_lat, location_lng, location_address, crime_location_lat, crime_location_lng, crime_location_address, created_at, status_updates');
+      .select('id, user_id, type, title, description, severity, status, location_lat, location_lng, location_address, crime_location_lat, crime_location_lng, crime_location_address, created_at, status_updates, resolved_at, crime_time, assigned_station, estimated_resolution_time, admin_action');
 
     if (threshold) {
       query = query.gte('created_at', threshold);
@@ -136,6 +156,44 @@ export default function HeatmapPage() {
     return reports.filter(r => r.type === filter);
   }, [reports, filter]);
 
+  // Danger zone clusters (~500m grid)
+  const dangerZones = useMemo(() => {
+    const grid = new Map<string, { lat: number; lng: number; count: number; severitySum: number; recentSum: number }>();
+    const now = Date.now();
+    filteredReports.forEach(r => {
+      const loc = r.crimeLocation || r.location;
+      const key = `${loc.lat.toFixed(2)}_${loc.lng.toFixed(2)}`;
+      const sev = r.severity === 'high' ? 3 : r.severity === 'medium' ? 2 : 1;
+      const ageDays = (now - new Date(r.createdAt).getTime()) / 86400000;
+      const recency = Math.max(0, 1 - ageDays / 30); // 1 (today) → 0 (30d+)
+      const cur = grid.get(key) || { lat: loc.lat, lng: loc.lng, count: 0, severitySum: 0, recentSum: 0 };
+      cur.count += 1;
+      cur.severitySum += sev;
+      cur.recentSum += recency;
+      grid.set(key, cur);
+    });
+    return Array.from(grid.values()).map(z => {
+      // risk score 0..100
+      const score = Math.min(100, Math.round(z.count * 8 + z.severitySum * 4 + z.recentSum * 6));
+      const level: 'high' | 'medium' | 'low' = score >= 50 ? 'high' : score >= 25 ? 'medium' : 'low';
+      return { ...z, score, level };
+    });
+  }, [filteredReports]);
+
+  // Time-based safety insights
+  const timeInsights = useMemo(() => {
+    const buckets = { morning: 0, afternoon: 0, night: 0 };
+    filteredReports.forEach(r => {
+      const d = new Date(r.crimeTime || r.createdAt);
+      buckets[timeBucket(d)]++;
+    });
+    const total = buckets.morning + buckets.afternoon + buckets.night || 1;
+    const max = Math.max(buckets.morning, buckets.afternoon, buckets.night);
+    const riskiest = (Object.entries(buckets) as Array<[keyof typeof buckets, number]>)
+      .find(([, v]) => v === max)?.[0] || 'night';
+    return { buckets, total, riskiest };
+  }, [filteredReports]);
+
   const areaStats = useMemo(() => {
     const map = new Map<string, { incidents: number; highestRisk: string; types: Set<string> }>();
     filteredPoints.forEach(p => {
@@ -158,6 +216,29 @@ export default function HeatmapPage() {
   useEffect(() => {
     if (!layerGroupRef.current) return;
     layerGroupRef.current.clearLayers();
+
+    // Danger zone overlays
+    dangerZones.forEach(z => {
+      const color = z.level === 'high' ? '#ef4444' : z.level === 'medium' ? '#f59e0b' : '#22c55e';
+      const advice = z.level === 'high'
+        ? 'Police surveillance required'
+        : z.level === 'medium'
+        ? 'Be cautious'
+        : 'Safe area';
+      L.circle([z.lat, z.lng], {
+        radius: 450,
+        color,
+        fillColor: color,
+        fillOpacity: 0.12,
+        weight: 1.5,
+        dashArray: z.level === 'high' ? '4,4' : undefined,
+      })
+        .bindTooltip(
+          `<div style="padding:6px"><div style="font-weight:700;text-transform:capitalize;color:${color}">${z.level} risk zone</div><div style="font-size:12px">Risk score: ${z.score}/100</div><div style="font-size:12px">${z.count} incident(s)</div><div style="font-size:12px;margin-top:4px;font-style:italic">${advice}</div></div>`,
+          { direction: 'top' }
+        )
+        .addTo(layerGroupRef.current!);
+    });
 
     filteredPoints.forEach(point => {
       const colors = getColor(point.intensity);
@@ -188,17 +269,34 @@ export default function HeatmapPage() {
 
     filteredReports.forEach(r => {
       const loc = r.crimeLocation || r.location;
+      const statusColor = r.status === 'resolved' ? '#22c55e' : r.status === 'investigating' ? '#3b82f6' : r.status === 'rejected' ? '#888' : '#f59e0b';
+      let resolutionLine = '';
+      if (r.status === 'resolved' && r.resolvedAt) {
+        const took = new Date(r.resolvedAt).getTime() - new Date(r.createdAt).getTime();
+        resolutionLine = `<div style="font-size:12px;color:#22c55e">Resolved in ${formatDuration(took)}</div>`;
+      } else if (r.status === 'investigating') {
+        resolutionLine = `<div style="font-size:12px;color:#3b82f6">Under Investigation</div>`;
+      } else {
+        resolutionLine = `<div style="font-size:12px;color:${statusColor};text-transform:capitalize">${r.status}</div>`;
+      }
+      const adminLines = [
+        r.assignedStation ? `<div style="font-size:11px;color:#888">Station: ${r.assignedStation}</div>` : '',
+        r.estimatedResolutionTime ? `<div style="font-size:11px;color:#888">ETA: ${r.estimatedResolutionTime}</div>` : '',
+        r.adminAction?.action ? `<div style="font-size:11px;color:#888">Action: ${r.adminAction.action}</div>` : '',
+      ].join('');
       const tooltipContent = `
-        <div style="padding:6px;min-width:150px">
+        <div style="padding:6px;min-width:200px">
           <div style="font-weight:700;margin-bottom:4px">${r.title}</div>
-          <div style="font-size:12px;color:#888">${r.type} · ${r.severity} severity</div>
-          <div style="font-size:12px;color:#888">${loc.address || ''}</div>
+          <div style="font-size:12px;color:#888;text-transform:capitalize">${r.type} · ${r.severity} severity</div>
+          ${resolutionLine}
+          ${adminLines}
+          <div style="font-size:11px;color:#888;margin-top:4px">${loc.address || ''}</div>
         </div>
       `;
 
       L.circleMarker([loc.lat, loc.lng], {
         radius: 6,
-        fillColor: r.severity === 'high' ? '#ef4444' : r.severity === 'medium' ? '#f59e0b' : '#22c55e',
+        fillColor: statusColor,
         color: '#fff',
         weight: 2,
         fillOpacity: 0.9,
@@ -206,11 +304,18 @@ export default function HeatmapPage() {
         .bindTooltip(tooltipContent, { permanent: false, direction: 'top', className: 'heatmap-tooltip', offset: [0, -8] })
         .addTo(layerGroupRef.current!);
     });
-  }, [filteredPoints, filteredReports]);
+  }, [filteredPoints, filteredReports, dangerZones]);
 
   const types = ['all', 'theft', 'assault', 'vandalism', 'robbery', 'fraud', 'harassment'];
   const totalIncidents = areaStats.reduce((sum, a) => sum + a.incidents, 0);
   const highRiskAreas = areaStats.filter(a => a.highestRisk === 'high').length;
+  const dangerHigh = dangerZones.filter(z => z.level === 'high').length;
+  const { buckets: tb, total: tt, riskiest } = timeInsights;
+  const tip = riskiest === 'night'
+    ? '⚠️ High risk at night — avoid isolated areas after sunset.'
+    : riskiest === 'morning'
+    ? '☀️ Most incidents in the morning — stay alert during commute.'
+    : '🌤️ Afternoon shows the most activity — be vigilant in busy areas.';
 
   return (
     <div className="min-h-screen py-8">
@@ -284,6 +389,58 @@ export default function HeatmapPage() {
 
         {/* Map */}
         <div ref={mapContainerRef} className="w-full h-[500px] rounded-2xl overflow-hidden glass-card mb-8" />
+
+        {/* Danger Zones + Time Insights */}
+        <div className="grid md:grid-cols-2 gap-4 mb-8">
+          <div className="glass-card rounded-2xl p-5">
+            <h3 className="font-semibold mb-1">Danger Zones</h3>
+            <p className="text-sm text-muted-foreground mb-3">Risk-scored clusters based on count, severity & recency</p>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="p-3 rounded-xl bg-emergency/10">
+                <div className="text-2xl font-bold text-emergency">{dangerHigh}</div>
+                <div className="text-xs text-muted-foreground">High</div>
+              </div>
+              <div className="p-3 rounded-xl bg-warning/10">
+                <div className="text-2xl font-bold text-warning">{dangerZones.filter(z => z.level === 'medium').length}</div>
+                <div className="text-xs text-muted-foreground">Medium</div>
+              </div>
+              <div className="p-3 rounded-xl bg-success/10">
+                <div className="text-2xl font-bold text-success">{dangerZones.filter(z => z.level === 'low').length}</div>
+                <div className="text-xs text-muted-foreground">Low</div>
+              </div>
+            </div>
+            {dangerHigh > 0 && (
+              <div className="mt-3 text-xs text-emergency font-medium">🚨 {dangerHigh} zone(s) require police surveillance</div>
+            )}
+          </div>
+
+          <div className="glass-card rounded-2xl p-5">
+            <h3 className="font-semibold mb-1">Time-Based Safety Insights</h3>
+            <p className="text-sm text-muted-foreground mb-3">When crimes happen most</p>
+            <div className="space-y-2">
+              {(['morning', 'afternoon', 'night'] as const).map(b => {
+                const v = tb[b];
+                const pct = tt ? (v / tt) * 100 : 0;
+                const label = b === 'morning' ? 'Morning (6–12)' : b === 'afternoon' ? 'Afternoon (12–6)' : 'Night (6–12)';
+                return (
+                  <div key={b}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="capitalize">{label}</span>
+                      <span className="text-muted-foreground">{v}</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                      <div
+                        className={`h-full ${b === riskiest ? 'bg-emergency' : 'bg-primary'} transition-all`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 text-xs font-medium">{tip}</div>
+          </div>
+        </div>
 
         {/* Area Stats Panel */}
         <div className="glass-card rounded-2xl p-6">
