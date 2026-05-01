@@ -14,18 +14,53 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_messages: {
+        Row: {
+          created_at: string
+          id: string
+          location_lat: number | null
+          location_lng: number | null
+          message: string
+          response: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          location_lat?: number | null
+          location_lng?: number | null
+          message: string
+          response?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          location_lat?: number | null
+          location_lng?: number | null
+          message?: string
+          response?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       crime_reports: {
         Row: {
+          admin_action: Json | null
+          assigned_station: string | null
           created_at: string
           crime_location_address: string | null
           crime_location_lat: number | null
           crime_location_lng: number | null
+          crime_time: string | null
           description: string
+          estimated_resolution_time: string | null
           id: string
           location_address: string | null
           location_lat: number
           location_lng: number
           media_names: string[] | null
+          resolved_at: string | null
           severity: string
           status: string
           status_updates: Json | null
@@ -35,16 +70,21 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          admin_action?: Json | null
+          assigned_station?: string | null
           created_at?: string
           crime_location_address?: string | null
           crime_location_lat?: number | null
           crime_location_lng?: number | null
+          crime_time?: string | null
           description?: string
+          estimated_resolution_time?: string | null
           id?: string
           location_address?: string | null
           location_lat?: number
           location_lng?: number
           media_names?: string[] | null
+          resolved_at?: string | null
           severity?: string
           status?: string
           status_updates?: Json | null
@@ -54,16 +94,21 @@ export type Database = {
           user_id: string
         }
         Update: {
+          admin_action?: Json | null
+          assigned_station?: string | null
           created_at?: string
           crime_location_address?: string | null
           crime_location_lat?: number | null
           crime_location_lng?: number | null
+          crime_time?: string | null
           description?: string
+          estimated_resolution_time?: string | null
           id?: string
           location_address?: string | null
           location_lat?: number
           location_lng?: number
           media_names?: string[] | null
+          resolved_at?: string | null
           severity?: string
           status?: string
           status_updates?: Json | null
