@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,20 +10,25 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
 const SendOtpSchema = z.object({
-  phone: z.string().min(10).max(20),
+  phone: z.string().regex(/^\+[1-9]\d{7,14}$/, "Phone must be E.164 format e.g. +14155552671"),
 });
 
 const VerifyOtpSchema = z.object({
-  phone: z.string().min(10).max(20),
+  phone: z.string().regex(/^\+[1-9]\d{7,14}$/),
   code: z.string().length(6),
 });
-
-// Simple in-memory OTP store (production should use DB)
-const otpStore = new Map<string, { code: string; expiresAt: number }>();
 
 function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
+
+async function sha256(s: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const RATE_LIMIT_MAX = 3; // max sends
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // per 10 minutes
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -44,6 +50,9 @@ serve(async (req) => {
   }
 
   const TWILIO_PHONE = Deno.env.get("TWILIO_PHONE_NUMBER");
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
     const body = await req.json();
@@ -58,8 +67,45 @@ serve(async (req) => {
       }
 
       const { phone } = parsed.data;
+
+      // ---- Rate limit ----
+      const { data: rl } = await supabaseAdmin
+        .from("otp_rate_limits")
+        .select("attempts, window_start")
+        .eq("phone", phone)
+        .maybeSingle();
+
+      const now = Date.now();
+      let attempts = 0;
+      let windowStart = now;
+      if (rl) {
+        const ws = new Date(rl.window_start).getTime();
+        if (now - ws < RATE_LIMIT_WINDOW_MS) {
+          attempts = rl.attempts;
+          windowStart = ws;
+        }
+      }
+      if (attempts >= RATE_LIMIT_MAX) {
+        const retryAfter = Math.ceil((windowStart + RATE_LIMIT_WINDOW_MS - now) / 1000);
+        return new Response(JSON.stringify({ error: "Too many OTP requests. Please try again later." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retryAfter) },
+        });
+      }
+
+      await supabaseAdmin.from("otp_rate_limits").upsert({
+        phone,
+        attempts: attempts + 1,
+        window_start: new Date(windowStart).toISOString(),
+      });
+
       const code = generateOtp();
-      otpStore.set(phone, { code, expiresAt: Date.now() + 5 * 60 * 1000 });
+      const codeHash = await sha256(code);
+      await supabaseAdmin.from("otp_codes").upsert({
+        phone,
+        code_hash: codeHash,
+        expires_at: new Date(now + 5 * 60 * 1000).toISOString(),
+      });
 
       const fromNumber = TWILIO_PHONE || "+15017122661";
 
@@ -99,29 +145,29 @@ serve(async (req) => {
       }
 
       const { phone, code } = parsed.data;
-      const stored = otpStore.get(phone);
+      const { data: stored } = await supabaseAdmin
+        .from("otp_codes")
+        .select("code_hash, expires_at")
+        .eq("phone", phone)
+        .maybeSingle();
 
-      if (!stored || stored.expiresAt < Date.now()) {
-        otpStore.delete(phone);
+      if (!stored || new Date(stored.expires_at).getTime() < Date.now()) {
+        await supabaseAdmin.from("otp_codes").delete().eq("phone", phone);
         return new Response(JSON.stringify({ error: "OTP expired or not found" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      if (stored.code !== code) {
+      const codeHash = await sha256(code);
+      if (stored.code_hash !== codeHash) {
         return new Response(JSON.stringify({ error: "Invalid OTP" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      otpStore.delete(phone);
+      await supabaseAdmin.from("otp_codes").delete().eq("phone", phone);
 
       // Sign in or sign up user via Supabase Admin
-      const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-      const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
-      const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
       // Check if user exists with this phone
       const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
       const existingUser = existingUsers?.users?.find((u: any) => u.phone === phone);
