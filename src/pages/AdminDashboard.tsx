@@ -49,6 +49,7 @@ export default function AdminDashboard() {
 
   const [newService, setNewService] = useState({ name: '', type: 'police' as EmergencyService['type'], address: '', phone: '', lat: '', lng: '' });
   const [adminEdit, setAdminEdit] = useState({ assignedStation: '', estimatedResolutionTime: '', action: '', note: '' });
+  const [sosEdit, setSosEdit] = useState({ responderName: '', etaMinutes: '' });
 
   const fetchData = () => {
     api.getDashboardStats().then(setStats);
@@ -100,6 +101,32 @@ export default function AdminDashboard() {
   const handleAlertAction = (id: string, status: SOSAlert['status']) => {
     api.updateSOSStatus(id, status).then(() => { fetchData(); toast.success(`Alert ${status}`); });
   };
+
+  const saveSosResponder = async () => {
+    if (!selectedAlert) return;
+    try {
+      const updated = await api.updateSOSResponder(selectedAlert._id, {
+        responderName: sosEdit.responderName || undefined,
+        etaMinutes: sosEdit.etaMinutes ? parseInt(sosEdit.etaMinutes, 10) : undefined,
+        status: selectedAlert.status === 'active' ? 'responding' : selectedAlert.status,
+      });
+      toast.success('Responder details saved');
+      setSelectedAlert(updated);
+      fetchData();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save');
+    }
+  };
+
+  // Sync SOS responder form when an alert is selected
+  useEffect(() => {
+    if (selectedAlert) {
+      setSosEdit({
+        responderName: selectedAlert.responderName || '',
+        etaMinutes: selectedAlert.etaMinutes != null ? String(selectedAlert.etaMinutes) : '',
+      });
+    }
+  }, [selectedAlert]);
 
   const handleAddService = async (e: React.FormEvent) => {
     e.preventDefault();
