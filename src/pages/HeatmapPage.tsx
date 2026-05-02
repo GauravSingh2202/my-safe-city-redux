@@ -11,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
+import { Settings2, RotateCcw } from 'lucide-react';
 
 const riskColors = {
   low: { fill: '#22c55e', stroke: '#16a34a', bg: 'bg-success/10', text: 'text-success' },
@@ -92,6 +94,32 @@ export default function HeatmapPage() {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
+
+  // Tunable danger-zone thresholds (persisted)
+  const DEFAULT_THRESHOLDS = { high: 50, medium: 25 };
+  const [thresholds, setThresholds] = useState<{ high: number; medium: number }>(() => {
+    try {
+      const raw = localStorage.getItem('heatmap-thresholds');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed.high === 'number' && typeof parsed.medium === 'number') return parsed;
+      }
+    } catch { /* ignore */ }
+    return DEFAULT_THRESHOLDS;
+  });
+  const [showSettings, setShowSettings] = useState(false);
+
+  useEffect(() => {
+    try { localStorage.setItem('heatmap-thresholds', JSON.stringify(thresholds)); } catch { /* ignore */ }
+  }, [thresholds]);
+
+  const setHigh = (v: number) => {
+    setThresholds(t => ({ high: v, medium: Math.min(t.medium, v - 1) }));
+  };
+  const setMedium = (v: number) => {
+    setThresholds(t => ({ medium: v, high: Math.max(t.high, v + 1) }));
+  };
+  const resetThresholds = () => setThresholds(DEFAULT_THRESHOLDS);
 
   const fetchData = useCallback(async () => {
     const threshold = getDateThreshold(timePeriod);
@@ -175,10 +203,11 @@ export default function HeatmapPage() {
     return Array.from(grid.values()).map(z => {
       // risk score 0..100
       const score = Math.min(100, Math.round(z.count * 8 + z.severitySum * 4 + z.recentSum * 6));
-      const level: 'high' | 'medium' | 'low' = score >= 50 ? 'high' : score >= 25 ? 'medium' : 'low';
+      const level: 'high' | 'medium' | 'low' =
+        score >= thresholds.high ? 'high' : score >= thresholds.medium ? 'medium' : 'low';
       return { ...z, score, level };
     });
-  }, [filteredReports]);
+  }, [filteredReports, thresholds]);
 
   // Time-based safety insights
   const timeInsights = useMemo(() => {
