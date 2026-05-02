@@ -272,32 +272,44 @@ export type Database = {
       }
       sos_alerts: {
         Row: {
+          acknowledged_at: string | null
           created_at: string
+          delivered_at: string | null
+          eta_minutes: number | null
           id: string
           location_address: string | null
           location_lat: number
           location_lng: number
           resolved_at: string | null
+          responder_name: string | null
           status: string
           user_id: string
         }
         Insert: {
+          acknowledged_at?: string | null
           created_at?: string
+          delivered_at?: string | null
+          eta_minutes?: number | null
           id?: string
           location_address?: string | null
           location_lat: number
           location_lng: number
           resolved_at?: string | null
+          responder_name?: string | null
           status?: string
           user_id: string
         }
         Update: {
+          acknowledged_at?: string | null
           created_at?: string
+          delivered_at?: string | null
+          eta_minutes?: number | null
           id?: string
           location_address?: string | null
           location_lat?: number
           location_lng?: number
           resolved_at?: string | null
+          responder_name?: string | null
           status?: string
           user_id?: string
         }

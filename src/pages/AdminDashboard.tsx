@@ -49,6 +49,7 @@ export default function AdminDashboard() {
 
   const [newService, setNewService] = useState({ name: '', type: 'police' as EmergencyService['type'], address: '', phone: '', lat: '', lng: '' });
   const [adminEdit, setAdminEdit] = useState({ assignedStation: '', estimatedResolutionTime: '', action: '', note: '' });
+  const [sosEdit, setSosEdit] = useState({ responderName: '', etaMinutes: '' });
 
   const fetchData = () => {
     api.getDashboardStats().then(setStats);
@@ -100,6 +101,32 @@ export default function AdminDashboard() {
   const handleAlertAction = (id: string, status: SOSAlert['status']) => {
     api.updateSOSStatus(id, status).then(() => { fetchData(); toast.success(`Alert ${status}`); });
   };
+
+  const saveSosResponder = async () => {
+    if (!selectedAlert) return;
+    try {
+      const updated = await api.updateSOSResponder(selectedAlert._id, {
+        responderName: sosEdit.responderName || undefined,
+        etaMinutes: sosEdit.etaMinutes ? parseInt(sosEdit.etaMinutes, 10) : undefined,
+        status: selectedAlert.status === 'active' ? 'responding' : selectedAlert.status,
+      });
+      toast.success('Responder details saved');
+      setSelectedAlert(updated);
+      fetchData();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save');
+    }
+  };
+
+  // Sync SOS responder form when an alert is selected
+  useEffect(() => {
+    if (selectedAlert) {
+      setSosEdit({
+        responderName: selectedAlert.responderName || '',
+        etaMinutes: selectedAlert.etaMinutes != null ? String(selectedAlert.etaMinutes) : '',
+      });
+    }
+  }, [selectedAlert]);
 
   const handleAddService = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -302,7 +329,7 @@ export default function AdminDashboard() {
 
             {/* SOS Alert Detail Dialog */}
             <Dialog open={!!selectedAlert} onOpenChange={open => !open && setSelectedAlert(null)}>
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 {selectedAlert && (
                   <>
                     <DialogHeader>
@@ -317,8 +344,41 @@ export default function AdminDashboard() {
                       <div><span className="text-muted-foreground">Location</span><p className="font-medium">{selectedAlert.location.address || 'Unknown'}</p>
                         <p className="text-xs text-muted-foreground">Lat: {selectedAlert.location.lat.toFixed(4)}, Lng: {selectedAlert.location.lng.toFixed(4)}</p></div>
                       <div><span className="text-muted-foreground">Triggered At</span><p className="font-medium">{new Date(selectedAlert.createdAt).toLocaleString()}</p></div>
+                      {selectedAlert.deliveredAt && <div><span className="text-muted-foreground">Delivered At</span><p className="font-medium">{new Date(selectedAlert.deliveredAt).toLocaleString()}</p></div>}
+                      {selectedAlert.acknowledgedAt && <div><span className="text-muted-foreground">Acknowledged At</span><p className="font-medium">{new Date(selectedAlert.acknowledgedAt).toLocaleString()}</p></div>}
                       {selectedAlert.resolvedAt && <div><span className="text-muted-foreground">Resolved At</span><p className="font-medium">{new Date(selectedAlert.resolvedAt).toLocaleString()}</p></div>}
                     </div>
+
+                    {selectedAlert.status !== 'resolved' && (
+                      <div className="mt-4 p-3 rounded-xl border border-border space-y-3">
+                        <p className="text-sm font-semibold">Dispatch Responder</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            placeholder="Responder name (e.g. Unit 12)"
+                            value={sosEdit.responderName}
+                            onChange={e => setSosEdit(s => ({ ...s, responderName: e.target.value }))}
+                            className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                          />
+                          <input
+                            type="number"
+                            min={1}
+                            max={240}
+                            placeholder="ETA (minutes)"
+                            value={sosEdit.etaMinutes}
+                            onChange={e => setSosEdit(s => ({ ...s, etaMinutes: e.target.value }))}
+                            className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                          />
+                        </div>
+                        <button
+                          onClick={saveSosResponder}
+                          className="w-full py-2 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 active:scale-95 transition-all"
+                        >
+                          Save & Mark Responding
+                        </button>
+                      </div>
+                    )}
+
                     {selectedAlert.status !== 'resolved' && (
                       <div className="flex gap-3 mt-4">
                         {selectedAlert.status === 'active' && (

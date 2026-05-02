@@ -8,6 +8,8 @@ import { api } from '@/services/api';
 import type { CrimeReport, SOSAlert } from '@/types';
 import ProfileEditDialog from '@/components/ProfileEditDialog';
 import { Button } from '@/components/ui/button';
+import SOSStatusTracker from '@/components/SOSStatusTracker';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function ProfilePage() {
   const { user, isAuthenticated, refreshUser } = useAuth();
@@ -32,8 +34,12 @@ export default function ProfilePage() {
         setReports(reps);
         setSOSAlerts(sos);
       } else if (user) {
-        const reps = await api.getUserReports(user._id);
+        const [reps, sos] = await Promise.all([
+          api.getUserReports(user._id),
+          api.getSOSAlerts(),
+        ]);
         setReports(reps);
+        setSOSAlerts(sos);
       }
     } catch (err) {
       console.error('Failed to load profile data', err);
@@ -42,9 +48,30 @@ export default function ProfilePage() {
     }
   };
 
+  // Realtime updates for SOS alerts (citizen tracker)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const channel = supabase
+      .channel('profile-sos-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sos_alerts' }, () => {
+        loadData();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?._id]);
+
   if (!user) return null;
 
   const isAdmin = user.role === 'admin';
+
+  // Recent SOS alerts to show tracker for (citizens only): all active/responding + last resolved
+  const visibleAlerts = !isAdmin
+    ? [
+        ...sosAlerts.filter(a => a.status !== 'resolved'),
+        ...sosAlerts.filter(a => a.status === 'resolved').slice(0, 1),
+      ]
+    : [];
 
   // Stats for admin
   const totalReports = reports.length;
@@ -159,6 +186,20 @@ export default function ProfilePage() {
 
         {/* Reports list */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          {!isAdmin && visibleAlerts.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-emergency" />
+                SOS Status
+              </h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {visibleAlerts.map(a => (
+                  <SOSStatusTracker key={a._id} alert={a} />
+                ))}
+              </div>
+            </div>
+          )}
+
           <h2 className="text-lg font-bold mb-4">
             {isAdmin ? 'All Crime Reports' : 'My Crime Reports'}
           </h2>

@@ -11,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
+import { Settings2, RotateCcw } from 'lucide-react';
 
 const riskColors = {
   low: { fill: '#22c55e', stroke: '#16a34a', bg: 'bg-success/10', text: 'text-success' },
@@ -92,6 +94,32 @@ export default function HeatmapPage() {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
+
+  // Tunable danger-zone thresholds (persisted)
+  const DEFAULT_THRESHOLDS = { high: 50, medium: 25 };
+  const [thresholds, setThresholds] = useState<{ high: number; medium: number }>(() => {
+    try {
+      const raw = localStorage.getItem('heatmap-thresholds');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed.high === 'number' && typeof parsed.medium === 'number') return parsed;
+      }
+    } catch { /* ignore */ }
+    return DEFAULT_THRESHOLDS;
+  });
+  const [showSettings, setShowSettings] = useState(false);
+
+  useEffect(() => {
+    try { localStorage.setItem('heatmap-thresholds', JSON.stringify(thresholds)); } catch { /* ignore */ }
+  }, [thresholds]);
+
+  const setHigh = (v: number) => {
+    setThresholds(t => ({ high: v, medium: Math.min(t.medium, v - 1) }));
+  };
+  const setMedium = (v: number) => {
+    setThresholds(t => ({ medium: v, high: Math.max(t.high, v + 1) }));
+  };
+  const resetThresholds = () => setThresholds(DEFAULT_THRESHOLDS);
 
   const fetchData = useCallback(async () => {
     const threshold = getDateThreshold(timePeriod);
@@ -175,10 +203,11 @@ export default function HeatmapPage() {
     return Array.from(grid.values()).map(z => {
       // risk score 0..100
       const score = Math.min(100, Math.round(z.count * 8 + z.severitySum * 4 + z.recentSum * 6));
-      const level: 'high' | 'medium' | 'low' = score >= 50 ? 'high' : score >= 25 ? 'medium' : 'low';
+      const level: 'high' | 'medium' | 'low' =
+        score >= thresholds.high ? 'high' : score >= thresholds.medium ? 'medium' : 'low';
       return { ...z, score, level };
     });
-  }, [filteredReports]);
+  }, [filteredReports, thresholds]);
 
   // Time-based safety insights
   const timeInsights = useMemo(() => {
@@ -366,25 +395,91 @@ export default function HeatmapPage() {
           </Select>
         </div>
 
-        {/* Legend */}
-        <div className="flex gap-4 mb-4">
-          {[
-            { label: 'Low Risk', color: 'bg-success' },
-            { label: 'Medium Risk', color: 'bg-warning' },
-            { label: 'High Risk', color: 'bg-emergency' },
-          ].map(l => (
-            <div key={l.label} className="flex items-center gap-2 text-sm">
-              <div className={`w-3 h-3 rounded-full ${l.color}`} />
-              {l.label}
+        {/* Legend + threshold settings */}
+        <div className="glass-card rounded-2xl p-4 mb-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2 text-sm">
+              <div className="w-3 h-3 rounded-full bg-success" />
+              <span className="font-medium">Low</span>
+              <span className="text-muted-foreground text-xs">score &lt; {thresholds.medium}</span>
             </div>
-          ))}
-          <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
-            </span>
-            Live
+            <div className="flex items-center gap-2 text-sm">
+              <div className="w-3 h-3 rounded-full bg-warning" />
+              <span className="font-medium">Medium</span>
+              <span className="text-muted-foreground text-xs">{thresholds.medium}–{thresholds.high - 1}</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <div className="w-3 h-3 rounded-full bg-emergency" />
+              <span className="font-medium">High</span>
+              <span className="text-muted-foreground text-xs">≥ {thresholds.high}</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <div className="w-3 h-3 rounded-full bg-primary" />
+              <span className="font-medium">Incident marker</span>
+            </div>
+            <button
+              onClick={() => setShowSettings(s => !s)}
+              className="ml-auto flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg bg-secondary hover:bg-accent transition-colors"
+            >
+              <Settings2 className="w-4 h-4" />
+              {showSettings ? 'Hide' : 'Tune'} thresholds
+            </button>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
+              </span>
+              Live
+            </div>
           </div>
+
+          {showSettings && (
+            <div className="mt-4 pt-4 border-t border-border space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Risk score = <span className="font-mono">incidents × 8 + severity × 4 + recency × 6</span>, capped at 100.
+                A zone is flagged High if its score ≥ <span className="font-semibold">{thresholds.high}</span> and Medium if ≥ <span className="font-semibold">{thresholds.medium}</span>.
+              </p>
+              <div>
+                <div className="flex justify-between text-sm mb-2">
+                  <label className="font-medium flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emergency" />
+                    High risk threshold
+                  </label>
+                  <span className="font-mono text-emergency">{thresholds.high}</span>
+                </div>
+                <Slider
+                  value={[thresholds.high]}
+                  min={10}
+                  max={100}
+                  step={1}
+                  onValueChange={(v) => setHigh(v[0])}
+                />
+              </div>
+              <div>
+                <div className="flex justify-between text-sm mb-2">
+                  <label className="font-medium flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-warning" />
+                    Medium risk threshold
+                  </label>
+                  <span className="font-mono text-warning">{thresholds.medium}</span>
+                </div>
+                <Slider
+                  value={[thresholds.medium]}
+                  min={1}
+                  max={99}
+                  step={1}
+                  onValueChange={(v) => setMedium(v[0])}
+                />
+              </div>
+              <button
+                onClick={resetThresholds}
+                className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-secondary hover:bg-accent transition-colors"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Reset to defaults (50 / 25)
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Map */}
