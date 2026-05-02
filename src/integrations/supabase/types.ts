@@ -201,6 +201,45 @@ export type Database = {
           },
         ]
       }
+      otp_codes: {
+        Row: {
+          code_hash: string
+          created_at: string
+          expires_at: string
+          phone: string
+        }
+        Insert: {
+          code_hash: string
+          created_at?: string
+          expires_at: string
+          phone: string
+        }
+        Update: {
+          code_hash?: string
+          created_at?: string
+          expires_at?: string
+          phone?: string
+        }
+        Relationships: []
+      }
+      otp_rate_limits: {
+        Row: {
+          attempts: number
+          phone: string
+          window_start: string
+        }
+        Insert: {
+          attempts?: number
+          phone: string
+          window_start?: string
+        }
+        Update: {
+          attempts?: number
+          phone?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
