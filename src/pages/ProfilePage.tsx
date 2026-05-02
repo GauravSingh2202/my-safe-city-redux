@@ -186,6 +186,20 @@ export default function ProfilePage() {
 
         {/* Reports list */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          {!isAdmin && visibleAlerts.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-emergency" />
+                SOS Status
+              </h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {visibleAlerts.map(a => (
+                  <SOSStatusTracker key={a._id} alert={a} />
+                ))}
+              </div>
+            </div>
+          )}
+
           <h2 className="text-lg font-bold mb-4">
             {isAdmin ? 'All Crime Reports' : 'My Crime Reports'}
           </h2>
