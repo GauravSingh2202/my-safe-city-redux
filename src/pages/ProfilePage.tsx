@@ -8,6 +8,8 @@ import { api } from '@/services/api';
 import type { CrimeReport, SOSAlert } from '@/types';
 import ProfileEditDialog from '@/components/ProfileEditDialog';
 import { Button } from '@/components/ui/button';
+import SOSStatusTracker from '@/components/SOSStatusTracker';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function ProfilePage() {
   const { user, isAuthenticated, refreshUser } = useAuth();
@@ -32,8 +34,12 @@ export default function ProfilePage() {
         setReports(reps);
         setSOSAlerts(sos);
       } else if (user) {
-        const reps = await api.getUserReports(user._id);
+        const [reps, sos] = await Promise.all([
+          api.getUserReports(user._id),
+          api.getSOSAlerts(),
+        ]);
         setReports(reps);
+        setSOSAlerts(sos);
       }
     } catch (err) {
       console.error('Failed to load profile data', err);
@@ -42,9 +48,30 @@ export default function ProfilePage() {
     }
   };
 
+  // Realtime updates for SOS alerts (citizen tracker)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const channel = supabase
+      .channel('profile-sos-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sos_alerts' }, () => {
+        loadData();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user?._id]);
+
   if (!user) return null;
 
   const isAdmin = user.role === 'admin';
+
+  // Recent SOS alerts to show tracker for (citizens only): all active/responding + last resolved
+  const visibleAlerts = !isAdmin
+    ? [
+        ...sosAlerts.filter(a => a.status !== 'resolved'),
+        ...sosAlerts.filter(a => a.status === 'resolved').slice(0, 1),
+      ]
+    : [];
 
   // Stats for admin
   const totalReports = reports.length;
