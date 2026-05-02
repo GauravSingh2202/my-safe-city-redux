@@ -53,6 +53,10 @@ function mapSOSAlert(a: any): SOSAlert {
     status: a.status,
     createdAt: a.created_at,
     resolvedAt: a.resolved_at || undefined,
+    deliveredAt: a.delivered_at || undefined,
+    acknowledgedAt: a.acknowledged_at || undefined,
+    responderName: a.responder_name || undefined,
+    etaMinutes: a.eta_minutes ?? undefined,
   };
 }
 
@@ -124,6 +128,24 @@ export const api = {
     const { data, error } = await supabase
       .from('sos_alerts')
       .update(updates)
+      .eq('id', id)
+      .select('*, profiles(name, phone, email)')
+      .single();
+    if (error) throw new Error(error.message);
+    return mapSOSAlert(data);
+  },
+
+  updateSOSResponder: async (
+    id: string,
+    fields: { responderName?: string; etaMinutes?: number; status?: SOSAlert['status'] }
+  ): Promise<SOSAlert> => {
+    const payload: any = {};
+    if (fields.responderName !== undefined) payload.responder_name = fields.responderName;
+    if (fields.etaMinutes !== undefined) payload.eta_minutes = fields.etaMinutes;
+    if (fields.status !== undefined) payload.status = fields.status;
+    const { data, error } = await supabase
+      .from('sos_alerts')
+      .update(payload)
       .eq('id', id)
       .select('*, profiles(name, phone, email)')
       .single();

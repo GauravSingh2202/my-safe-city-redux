@@ -28,6 +28,10 @@ export interface SOSAlert {
   status: 'active' | 'responding' | 'resolved';
   createdAt: string;
   resolvedAt?: string;
+  deliveredAt?: string;
+  acknowledgedAt?: string;
+  responderName?: string;
+  etaMinutes?: number;
 }
 
 export interface CrimeReport {
