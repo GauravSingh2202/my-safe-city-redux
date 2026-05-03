@@ -464,6 +464,39 @@ export default function AdminDashboard() {
                         </div>
                       )}
                       <div><span className="text-muted-foreground">Description</span><p className="mt-1">{selectedReport.description}</p></div>
+                      {typeof selectedReport.authenticityScore === 'number' && (
+                        <div className={`rounded-lg p-3 border ${
+                          selectedReport.authenticityScore >= 70
+                            ? 'bg-success/5 border-success/30'
+                            : selectedReport.authenticityScore >= 40
+                            ? 'bg-warning/5 border-warning/30'
+                            : 'bg-emergency/5 border-emergency/30'
+                        }`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-semibold flex items-center gap-2">
+                              {selectedReport.authenticityScore >= 70
+                                ? <ShieldCheck className="w-4 h-4 text-success" />
+                                : <ShieldAlert className="w-4 h-4 text-emergency" />}
+                              AI Authenticity
+                            </span>
+                            <span className="text-sm font-bold">
+                              {selectedReport.authenticityScore}/100 · {selectedReport.authenticityAnalysis?.verdict?.replace('_', ' ')}
+                            </span>
+                          </div>
+                          {selectedReport.authenticityAnalysis?.flags && selectedReport.authenticityAnalysis.flags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {selectedReport.authenticityAnalysis.flags.map((f, i) => (
+                                <span key={i} className="text-[10px] uppercase tracking-wide bg-background/60 border border-border px-1.5 py-0.5 rounded">{f}</span>
+                              ))}
+                            </div>
+                          )}
+                          {selectedReport.authenticityAnalysis?.reasons && (
+                            <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-0.5">
+                              {selectedReport.authenticityAnalysis.reasons.map((r, i) => <li key={i}>{r}</li>)}
+                            </ul>
+                          )}
+                        </div>
+                      )}
                       {selectedReport.mediaNames && selectedReport.mediaNames.length > 0 && (
                         <div>
                           <span className="text-muted-foreground">Evidence</span>
