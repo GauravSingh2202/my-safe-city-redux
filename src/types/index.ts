@@ -62,6 +62,14 @@ export interface CrimeReport {
   assignedStation?: string;
   estimatedResolutionTime?: string;
   adminAction?: { action?: string; note?: string; updatedAt?: string; updatedBy?: string };
+  authenticityScore?: number;
+  authenticityAnalysis?: {
+    score?: number;
+    verdict?: 'genuine' | 'suspicious' | 'likely_fake';
+    reasons?: string[];
+    flags?: string[];
+    analyzed_at?: string;
+  };
 }
 
 export interface EmergencyService {
