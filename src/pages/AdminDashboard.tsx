@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, AlertTriangle, FileText, TrendingUp, CheckCircle, Clock, XCircle, Eye, Shield, Activity, ArrowUpRight, ArrowDownRight, MapPin, Zap, User, Calendar, Tag, Plus, Trash2, Building2, Phone, Users, Mail } from 'lucide-react';
+import { LayoutDashboard, AlertTriangle, FileText, TrendingUp, CheckCircle, Clock, XCircle, Eye, Shield, Activity, ArrowUpRight, ArrowDownRight, MapPin, Zap, User, Calendar, Tag, Plus, Trash2, Building2, Phone, Users, Mail, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -409,6 +409,21 @@ export default function AdminDashboard() {
                   <p className="font-semibold truncate">{r.title}</p>
                   <p className="text-sm text-muted-foreground">{r.userName} · {r.type} · {r.location.address}</p>
                 </div>
+                {typeof r.authenticityScore === 'number' && (
+                  <span
+                    title={r.authenticityAnalysis?.reasons?.join(' · ') || ''}
+                    className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border ${
+                      r.authenticityScore >= 70
+                        ? 'bg-success/10 text-success border-success/30'
+                        : r.authenticityScore >= 40
+                        ? 'bg-warning/10 text-warning border-warning/30'
+                        : 'bg-emergency/10 text-emergency border-emergency/30'
+                    }`}
+                  >
+                    {r.authenticityScore >= 70 ? <ShieldCheck className="w-3 h-3" /> : <ShieldAlert className="w-3 h-3" />}
+                    {r.authenticityScore}
+                  </span>
+                )}
                 <span className="text-xs capitalize font-medium">{r.status}</span>
                 {r.status === 'pending' && (
                   <div onClick={e => e.stopPropagation()} className="flex gap-1">
@@ -449,6 +464,39 @@ export default function AdminDashboard() {
                         </div>
                       )}
                       <div><span className="text-muted-foreground">Description</span><p className="mt-1">{selectedReport.description}</p></div>
+                      {typeof selectedReport.authenticityScore === 'number' && (
+                        <div className={`rounded-lg p-3 border ${
+                          selectedReport.authenticityScore >= 70
+                            ? 'bg-success/5 border-success/30'
+                            : selectedReport.authenticityScore >= 40
+                            ? 'bg-warning/5 border-warning/30'
+                            : 'bg-emergency/5 border-emergency/30'
+                        }`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-semibold flex items-center gap-2">
+                              {selectedReport.authenticityScore >= 70
+                                ? <ShieldCheck className="w-4 h-4 text-success" />
+                                : <ShieldAlert className="w-4 h-4 text-emergency" />}
+                              AI Authenticity
+                            </span>
+                            <span className="text-sm font-bold">
+                              {selectedReport.authenticityScore}/100 · {selectedReport.authenticityAnalysis?.verdict?.replace('_', ' ')}
+                            </span>
+                          </div>
+                          {selectedReport.authenticityAnalysis?.flags && selectedReport.authenticityAnalysis.flags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {selectedReport.authenticityAnalysis.flags.map((f, i) => (
+                                <span key={i} className="text-[10px] uppercase tracking-wide bg-background/60 border border-border px-1.5 py-0.5 rounded">{f}</span>
+                              ))}
+                            </div>
+                          )}
+                          {selectedReport.authenticityAnalysis?.reasons && (
+                            <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-0.5">
+                              {selectedReport.authenticityAnalysis.reasons.map((r, i) => <li key={i}>{r}</li>)}
+                            </ul>
+                          )}
+                        </div>
+                      )}
                       {selectedReport.mediaNames && selectedReport.mediaNames.length > 0 && (
                         <div>
                           <span className="text-muted-foreground">Evidence</span>

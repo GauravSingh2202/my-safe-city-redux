@@ -48,6 +48,8 @@ export type Database = {
         Row: {
           admin_action: Json | null
           assigned_station: string | null
+          authenticity_analysis: Json | null
+          authenticity_score: number | null
           created_at: string
           crime_location_address: string | null
           crime_location_lat: number | null
@@ -72,6 +74,8 @@ export type Database = {
         Insert: {
           admin_action?: Json | null
           assigned_station?: string | null
+          authenticity_analysis?: Json | null
+          authenticity_score?: number | null
           created_at?: string
           crime_location_address?: string | null
           crime_location_lat?: number | null
@@ -96,6 +100,8 @@ export type Database = {
         Update: {
           admin_action?: Json | null
           assigned_station?: string | null
+          authenticity_analysis?: Json | null
+          authenticity_score?: number | null
           created_at?: string
           crime_location_address?: string | null
           crime_location_lat?: number | null

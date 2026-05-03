@@ -39,6 +39,8 @@ function mapReport(r: any): CrimeReport {
     assignedStation: r.assigned_station || undefined,
     estimatedResolutionTime: r.estimated_resolution_time || undefined,
     adminAction: r.admin_action && Object.keys(r.admin_action).length ? r.admin_action : undefined,
+    authenticityScore: r.authenticity_score ?? undefined,
+    authenticityAnalysis: r.authenticity_analysis && Object.keys(r.authenticity_analysis).length ? r.authenticity_analysis : undefined,
   };
 }
 
@@ -205,6 +207,10 @@ export const api = {
       title: 'Report Submitted',
       message: `Your ${reportData.type} report "${reportData.title}" has been submitted.`,
     });
+
+    // Fire-and-forget AI authenticity analysis (don't block UX)
+    supabase.functions.invoke('detect-fake-report', { body: { reportId: data.id } })
+      .catch((err) => console.warn('detect-fake-report failed', err));
 
     return mapReport(data);
   },
